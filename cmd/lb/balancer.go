@@ -126,11 +126,14 @@ func main() {
 	// TODO: Використовуйте дані про стан сервреа, щоб підтримувати список тих серверів, яким можна відправляти ззапит.
 	for _, server := range serversPool {
 		server := server
-		go func() {
+		go func(serverObj *Server) {
 			for range time.Tick(10 * time.Second) {
+				mutex.Lock()
+				serverObj.IsHealthy = health(serverObj)
 				log.Println(server, health(server))
+				mutex.Unlock()
 			}
-		}()
+		}(server)
 	}
 
 	frontend := httptools.CreateServer(*port, http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
