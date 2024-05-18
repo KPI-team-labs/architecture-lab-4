@@ -1,7 +1,7 @@
 FROM golang:1.22 as build
 
 WORKDIR /go/src/practice-4
-COPY architecture-practice-4-template .
+COPY . .
 
 RUN go test ./...
 ENV CGO_ENABLED=0

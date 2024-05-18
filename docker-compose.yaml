@@ -6,7 +6,7 @@ networks:
 services:
 
   balancer:
-    build: architecture-practice-4-template
+    build: .
     command: "lb"
     networks:
       - servers
@@ -14,21 +14,21 @@ services:
       - "8090:8090"
 
   server1:
-    build: architecture-practice-4-template
+    build: .
     networks:
       - servers
     ports:
       - "8080:8080"
 
   server2:
-    build: architecture-practice-4-template
+    build: .
     networks:
       - servers
     ports:
       - "8081:8080"
 
   server3:
-    build: architecture-practice-4-template
+    build: .
     networks:
       - servers
     ports:
