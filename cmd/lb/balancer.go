@@ -59,6 +59,22 @@ func health(server *Server) bool {
 	return true
 }
 
+func minConnectionServerIndex() int {
+	minIndex := -1
+	minConnectionCount := -1
+
+	for index, serverObj := range serversPool {
+		if serverObj.IsHealthy {
+			if minIndex == -1 || serverObj.ConnectionCount < minConnectionCount {
+				minIndex = index
+				minConnectionCount = serverObj.ConnectionCount
+			}
+		}
+	}
+
+	return minIndex
+}
+
 func forward(dst string, rw http.ResponseWriter, r *http.Request) error {
 	ctx, _ := context.WithTimeout(r.Context(), timeout)
 	fwdRequest := r.Clone(ctx)
