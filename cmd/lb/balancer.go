@@ -56,10 +56,11 @@ func health(server *Server) bool {
 	if resp.StatusCode != http.StatusOK {
 		return false
 	}
+	server.IsHealthy = true
 	return true
 }
 
-func minConnectionServerIndex() int {
+func minConnectionServerIndex(serversPool []*Server) int {
 	minIndex := -1
 	minConnectionCount := -1
 
@@ -79,7 +80,7 @@ func forward(rw http.ResponseWriter, r *http.Request) error {
 	ctx, _ := context.WithTimeout(r.Context(), timeout)
 	fwdRequest := r.Clone(ctx)
 	mutex.Lock()
-	minIndex := minConnectionServerIndex()
+	minIndex := minConnectionServerIndex(serversPool)
 
 	if minIndex == -1 {
 		mutex.Unlock()
@@ -123,21 +124,19 @@ func forward(rw http.ResponseWriter, r *http.Request) error {
 func main() {
 	flag.Parse()
 
-	// TODO: Використовуйте дані про стан сервреа, щоб підтримувати список тих серверів, яким можна відправляти ззапит.
 	for _, server := range serversPool {
-		server := server
+		server.IsHealthy = health(server)
 		go func(serverObj *Server) {
 			for range time.Tick(10 * time.Second) {
 				mutex.Lock()
 				serverObj.IsHealthy = health(serverObj)
-				log.Println(server, health(server))
+				log.Printf("%s: health=%t, connCnt=%d", serverObj.URLPath, serverObj.IsHealthy, serverObj.ConnectionCount)
 				mutex.Unlock()
 			}
 		}(server)
 	}
 
 	frontend := httptools.CreateServer(*port, http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		// TODO: Рееалізуйте свій алгоритм балансувальника.
 		forward(rw, r)
 	}))
 
