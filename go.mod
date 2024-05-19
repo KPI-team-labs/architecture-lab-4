@@ -1,3 +1,3 @@
-module github.com/roman-mazur/architecture-practice-4-template
+module github.com/KPI-team-labs/architecture-lab-4
 
 go 1.22

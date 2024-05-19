@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/roman-mazur/architecture-practice-4-template/httptools"
-	"github.com/roman-mazur/architecture-practice-4-template/signal"
+	"github.com/KPI-team-labs/architecture-lab-4/httptools"
+	"github.com/KPI-team-labs/architecture-lab-4/signal"
 )
 
 type Server struct {
