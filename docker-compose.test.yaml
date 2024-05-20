@@ -3,8 +3,10 @@ version: '2.1'
 services:
   test:
     build:
-      context: architecture-practice-4-template
+      context: .
       dockerfile: Dockerfile.test
+      args:
+        BUILDPLATFORM: linux/amd64
     networks:
       - servers
     depends_on:
