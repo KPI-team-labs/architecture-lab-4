@@ -22,3 +22,9 @@ docker compose up
 ```shell
 docker-compose -f docker-compose.yaml -f docker-compose.test.yaml up --exit-code-from test
 ```
+
+### Running the Unit Tests
+
+```shell
+go test -v ./...
+```

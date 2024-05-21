@@ -24,7 +24,7 @@ jobs:
           go mod tidy
       - name: Build Go
         run: go build ./cmd/stats/main.go
-      - name: Build Docker
+      - name: Build Docker and run Unit tests
         run: docker compose build
       - name: Running integration test
         run: docker-compose -f docker-compose.yaml -f docker-compose.test.yaml up --exit-code-from test
