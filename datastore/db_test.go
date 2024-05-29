@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestDb_Put(t *testing.T) {
@@ -14,7 +15,7 @@ func TestDb_Put(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	db, err := NewDb(dir)
+	db, err := NewDb(dir, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,44 +27,46 @@ func TestDb_Put(t *testing.T) {
 		{"key3", "value3"},
 	}
 
-	outFile, err := os.Open(filepath.Join(dir, outFileName))
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	t.Run("put/get", func(t *testing.T) {
 		for _, pair := range pairs {
-			err := db.Put(pair[0], pair[1])
-			if err != nil {
-				t.Errorf("Cannot put %s: %s", pairs[0], err)
-			}
-			value, err := db.Get(pair[0])
-			if err != nil {
-				t.Errorf("Cannot get %s: %s", pairs[0], err)
-			}
-			if value != pair[1] {
-				t.Errorf("Bad value returned expected %s, got %s", pair[1], value)
-			}
+			pair := pair
+			t.Run(pair[0], func(t *testing.T) {
+				t.Parallel()
+				err := db.Put(pair[0], pair[1])
+				if err != nil {
+					t.Errorf("Cannot put %s: %s", pair[0], err)
+				}
+				value, err := db.Get(pair[0])
+				if err != nil {
+					t.Errorf("Cannot get %s: %s", pair[0], err)
+				}
+				if value != pair[1] {
+					t.Errorf("Bad value returned expected %s, got %s", pair[1], value)
+				}
+			})
 		}
 	})
 
-	outInfo, err := outFile.Stat()
-	if err != nil {
-		t.Fatal(err)
-	}
-	size1 := outInfo.Size()
-
 	t.Run("file growth", func(t *testing.T) {
+		outFile, err := os.Open(filepath.Join(dir, outFileName+"0"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer outFile.Close()
+
 		for _, pair := range pairs {
+			pair := pair // Create a local copy of the loop variable
 			err := db.Put(pair[0], pair[1])
 			if err != nil {
-				t.Errorf("Cannot put %s: %s", pairs[0], err)
+				t.Errorf("Cannot put %s: %s", pair[0], err)
 			}
 		}
+
 		outInfo, err := outFile.Stat()
 		if err != nil {
 			t.Fatal(err)
 		}
+		size1 := outInfo.Size() / 2
 		if size1*2 != outInfo.Size() {
 			t.Errorf("Unexpected size (%d vs %d)", size1, outInfo.Size())
 		}
@@ -73,20 +76,94 @@ func TestDb_Put(t *testing.T) {
 		if err := db.Close(); err != nil {
 			t.Fatal(err)
 		}
-		db, err = NewDb(dir)
+
+		db, err = NewDb(dir, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		for _, pair := range pairs {
-			value, err := db.Get(pair[0])
-			if err != nil {
-				t.Errorf("Cannot put %s: %s", pairs[0], err)
-			}
-			if value != pair[1] {
-				t.Errorf("Bad value returned expected %s, got %s", pair[1], value)
-			}
+			pair := pair // Create a local copy of the loop variable
+			t.Run(pair[0], func(t *testing.T) {
+				t.Parallel()
+				value, err := db.Get(pair[0])
+				if err != nil {
+					t.Errorf("Cannot put %s: %s", pair[0], err)
+				}
+				if value != pair[1] {
+					t.Errorf("Bad value returned expected %s, got %s", pair[1], value)
+				}
+			})
 		}
 	})
+}
 
+func TestDb_Segmentation(t *testing.T) {
+	dir, err := ioutil.TempDir("", "test-db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	db, err := NewDb(dir, 45)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	t.Run("should create new file", func(t *testing.T) {
+		db.Put("key1", "value1")
+		db.Put("key2", "value2")
+		db.Put("key3", "value3")
+		db.Put("key2", "value5")
+
+		assertSegmentsCount(t, db, 2)
+	})
+
+	t.Run("should start segmentation", func(t *testing.T) {
+		db.Put("key4", "value4")
+
+		assertSegmentsCount(t, db, 3)
+
+		time.Sleep(2 * time.Second)
+
+		assertSegmentsCount(t, db, 2)
+	})
+
+	t.Run("shouldn't store duplicates", func(t *testing.T) {
+		file, err := os.Open(db.segments[0].filePath)
+		defer file.Close()
+
+		if err != nil {
+			t.Error(err)
+		}
+		inf, _ := file.Stat()
+		assertFileSize(t, inf, 66)
+	})
+
+	t.Run("shouldn't store new values of duplicate keys", func(t *testing.T) {
+		value, _ := db.Get("key2")
+		assertEqual(t, value, "value5")
+	})
+}
+
+func assertSegmentsCount(t *testing.T, db *Db, expectedCount int) {
+	t.Helper()
+	if len(db.segments) != expectedCount {
+		t.Errorf("Something went wrong with segmentation. Expected %d files, got %d", expectedCount, len(db.segments))
+	}
+}
+
+func assertFileSize(t *testing.T, fileInfo os.FileInfo, expectedSize int64) {
+	t.Helper()
+	if fileInfo.Size() != expectedSize {
+		t.Errorf("Something went wrong with segmentation. Expected size %d, got %d", expectedSize, fileInfo.Size())
+	}
+}
+
+func assertEqual(t *testing.T, got, expected interface{}) {
+	t.Helper()
+	if got != expected {
+		t.Errorf("Expected: %v, Got: %v", expected, got)
+	}
 }
