@@ -19,14 +19,18 @@ var ErrNotFound = fmt.Errorf("record does not exist")
 type hashIndex map[string]int64
 
 type Db struct {
-	out              *os.File
-	outPath          string
-	outOffset        int64
-	dir              string
-	segmentSize      int64
-	lastSegmentIndex int
-	index            hashIndex
-	segments         []*Segment
+	out                *os.File
+	outPath            string
+	outOffset          int64
+	dir                string
+	segmentSize        int64
+	lastSegmentIndex   int
+	keyPositions       chan *KeyPosition
+	indexOperations    chan IndexOperation
+	putOperation       chan entry
+	putOperationFinish chan error
+	index              hashIndex
+	segments           []*Segment
 }
 
 type Segment struct {
@@ -35,11 +39,26 @@ type Segment struct {
 	filePath  string
 }
 
+type IndexOperation struct {
+	Write bool
+	key   string
+	index int64
+}
+
+type KeyPosition struct {
+	segment  *Segment
+	position int64
+}
+
 func NewDb(dir string, segmentSize int64) (*Db, error) {
 	db := &Db{
-		dir:         dir,
-		segmentSize: segmentSize,
-		segments:    make([]*Segment, 0),
+		dir:                dir,
+		segmentSize:        segmentSize,
+		segments:           make([]*Segment, 0),
+		indexOperations:    make(chan IndexOperation),
+		keyPositions:       make(chan *KeyPosition),
+		putOperation:       make(chan entry),
+		putOperationFinish: make(chan error),
 	}
 
 	err := db.createSegment()
