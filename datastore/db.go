@@ -70,8 +70,63 @@ func NewDb(dir string, segmentSize int64) (*Db, error) {
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
-
+	db.startIndexRoutine()
+	db.PutRoutine()
 	return db, nil
+}
+
+func (db *Db) startIndexRoutine() {
+	go func() {
+		for op := range db.indexOperations {
+			if !op.Write {
+				segment, position, err := db.getSegmentAndPosition(op.key)
+				if err != nil {
+					db.keyPositions <- nil
+					continue
+				}
+				db.keyPositions <- &KeyPosition{
+					segment:  segment,
+					position: position,
+				}
+				continue
+			}
+			db.setKey(op.key, op.index)
+		}
+	}()
+}
+
+func (db *Db) PutRoutine() {
+	go func() {
+		for entry := range db.putOperation {
+			length := entry.getLength()
+
+			stat, err := db.out.Stat()
+			if err != nil {
+				db.putOperationFinish <- err
+				continue
+			}
+
+			if stat.Size()+length > db.segmentSize {
+				if err := db.createSegment(); err != nil {
+					db.putOperationFinish <- err
+					continue
+				}
+			}
+
+			n, err := db.out.Write(entry.Encode())
+			if err != nil {
+				db.putOperationFinish <- err
+				continue
+			}
+
+			db.indexOperations <- IndexOperation{
+				Write: true,
+				key:   entry.key,
+				index: int64(n),
+			}
+			db.putOperationFinish <- nil
+		}
+	}()
 }
 
 func (db *Db) createSegment() error {
@@ -95,6 +150,15 @@ func (db *Db) createSegment() error {
 	}
 
 	return nil
+}
+
+func (db *Db) getPos(key string) *KeyPosition {
+	readOp := IndexOperation{
+		Write: false,
+		key:   key,
+	}
+	db.indexOperations <- readOp
+	return <-db.keyPositions
 }
 
 func (db *Db) getNewFileName() string {
