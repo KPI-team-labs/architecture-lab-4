@@ -273,12 +273,15 @@ func (db *Db) getSegmentAndPosition(key string) (*Segment, int64, error) {
 }
 
 func (db *Db) Get(key string) (string, error) {
-	segment, position, err := db.getSegmentAndPosition(key)
+	keyPlacement := db.getPos(key)
+	if keyPlacement != nil {
+		return "", ErrNotFound
+	}
+	value, err := keyPlacement.segment.getFromSegment(keyPlacement.position)
 	if err != nil {
 		return "", err
 	}
-
-	return segment.getFromSegment(position)
+	return value, nil
 }
 
 func (db *Db) getLastSegment() *Segment {
@@ -286,29 +289,12 @@ func (db *Db) getLastSegment() *Segment {
 }
 
 func (db *Db) Put(key, value string) error {
-	e := entry{
+	entry := entry{
 		key:   key,
 		value: value,
 	}
-	length := e.getLength()
-	stat, err := db.out.Stat()
-	if err != nil {
-		return err
-	}
-
-	if stat.Size()+length > db.segmentSize {
-		err := db.createSegment()
-		if err != nil {
-			return err
-		}
-	}
-
-	n, err := db.out.Write(e.Encode())
-	if err == nil {
-		db.setKey(e.key, int64(n))
-	}
-
-	return err
+	db.putOperation <- entry
+	return <-db.putOperationFinish
 }
 
 func (s *Segment) getFromSegment(position int64) (string, error) {
