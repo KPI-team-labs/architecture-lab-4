@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 )
@@ -15,7 +16,7 @@ func TestDb_Put(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	db, err := NewDb(dir, 100)
+	db, err := NewDb(dir, 150)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +106,7 @@ func TestDb_Segmentation(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	db, err := NewDb(dir, 45)
+	db, err := NewDb(dir, 85)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,12 +139,54 @@ func TestDb_Segmentation(t *testing.T) {
 			t.Error(err)
 		}
 		inf, _ := file.Stat()
-		assertFileSize(t, inf, 66)
+		assertFileSize(t, inf, 126)
 	})
 
 	t.Run("shouldn't store new values of duplicate keys", func(t *testing.T) {
 		value, _ := db.Get("key2")
 		assertEqual(t, value, "value5")
+	})
+}
+
+func TestDb_Checksum(t *testing.T) {
+	dir, err := ioutil.TempDir("", "test-db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	db, err := NewDb(dir, 85)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	db.Put("key1", "value1")
+
+	t.Run("get value", func(t *testing.T) {
+		_, err := db.Get("key1")
+		if err != nil {
+			t.Errorf("something went wrong during getting value: %v", err)
+		}
+	})
+
+	file, err := os.OpenFile(db.outPath, os.O_RDWR, 0o655)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = file.WriteAt([]byte{0x59}, int64(3))
+	if err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+	file.Close()
+
+	t.Run("wrong during get value", func(t *testing.T) {
+		_, err := db.Get("key1")
+		if err == nil || !regexp.MustCompile("sha1").MatchString(err.Error()) {
+			t.Errorf("Expected error containing 'sha', but got: %v", err)
+		}
 	})
 }
 
