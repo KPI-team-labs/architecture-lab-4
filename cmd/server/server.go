@@ -17,9 +17,11 @@ import (
 
 var port = flag.Int("port", 8080, "server port")
 
-const confResponseDelaySec = "CONF_RESPONSE_DELAY_SEC"
-const confHealthFailure = "CONF_HEALTH_FAILURE"
-const dbUrl = "http://db:8083/db"
+const (
+	confResponseDelaySec = "CONF_RESPONSE_DELAY_SEC"
+	confHealthFailure    = "CONF_HEALTH_FAILURE"
+	dbUrl                = "http://db:8083/db"
+)
 
 type ReqBody struct {
 	Value string `json:"value"`
@@ -60,12 +62,6 @@ func main() {
 				rw.WriteHeader(resp.StatusCode)
 				return
 			}
-			respDelayString := os.Getenv(confResponseDelaySec)
-			if delaySec, parseErr := strconv.Atoi(respDelayString); parseErr == nil && delaySec > 0 && delaySec < 300 {
-				time.Sleep(time.Duration(delaySec) * time.Second)
-			}
-
-			report.Process(r)
 
 			var body RespBody
 			json.NewDecoder(resp.Body).Decode(&body)
@@ -75,32 +71,31 @@ func main() {
 			_ = json.NewEncoder(rw).Encode(body)
 
 			defer resp.Body.Close()
-		} else {
-			respDelayString := os.Getenv(confResponseDelaySec)
-			if delaySec, parseErr := strconv.Atoi(respDelayString); parseErr == nil && delaySec > 0 && delaySec < 300 {
-				time.Sleep(time.Duration(delaySec) * time.Second)
+		}
+		respDelayString := os.Getenv(confResponseDelaySec)
+		if delaySec, parseErr := strconv.Atoi(respDelayString); parseErr == nil && delaySec > 0 && delaySec < 300 {
+			time.Sleep(time.Duration(delaySec) * time.Second)
+		}
+
+		report.Process(r)
+
+		rw.Header().Set("content-type", "application/json")
+		rw.WriteHeader(http.StatusOK)
+
+		responseSize := 1024
+		if key == "" {
+			if sizeHeader := r.Header.Get("Response-Size"); sizeHeader != "" {
+				if size, err := strconv.Atoi(sizeHeader); err == nil && size > 0 {
+					responseSize = size
+				}
 			}
 
-			report.Process(r)
-
-			rw.Header().Set("content-type", "application/json")
-			rw.WriteHeader(http.StatusOK)
-
-			responseSize := 1024
-			if key == "" {
-				if sizeHeader := r.Header.Get("Response-Size"); sizeHeader != "" {
-					if size, err := strconv.Atoi(sizeHeader); err == nil && size > 0 {
-						responseSize = size
-					}
-				}
-
-				responseData := make([]string, responseSize)
-				for i := 0; i < responseSize; i++ {
-					responseData[i] = strconv.Itoa(responseSize)
-				}
-
-				_ = json.NewEncoder(rw).Encode(responseData)
+			responseData := make([]string, responseSize)
+			for i := 0; i < responseSize; i++ {
+				responseData[i] = strconv.Itoa(responseSize)
 			}
+
+			_ = json.NewEncoder(rw).Encode(responseData)
 		}
 
 	})
@@ -114,7 +109,7 @@ func main() {
 	body := ReqBody{Value: time.Now().Format(time.RFC3339)}
 	json.NewEncoder(buff).Encode(body)
 
-	res, err := client.Post(fmt.Sprintf("%s/hadescrb", dbUrl), "application/json", buff)
+	res, err := client.Post(fmt.Sprintf("%s/mcqueen-team", dbUrl), "application/json", buff)
 	if err != nil {
 		log.Fatal(err)
 	}

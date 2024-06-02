@@ -8,6 +8,8 @@ services:
   balancer:
     build: .
     command: "lb"
+    depends_on:
+      - db
     networks:
       - servers
     ports:
@@ -23,6 +25,8 @@ services:
 
   server1:
     build: .
+    depends_on:
+      - db
     networks:
       - servers
     ports:
@@ -30,6 +34,8 @@ services:
 
   server2:
     build: .
+    depends_on:
+      - db
     networks:
       - servers
     ports:
@@ -37,6 +43,8 @@ services:
 
   server3:
     build: .
+    depends_on:
+      - db
     networks:
       - servers
     ports:
