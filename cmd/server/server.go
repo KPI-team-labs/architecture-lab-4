@@ -79,11 +79,9 @@ func main() {
 
 		report.Process(r)
 
-		rw.Header().Set("content-type", "application/json")
-		rw.WriteHeader(http.StatusOK)
-
 		responseSize := 1024
 		if key == "" {
+			rw.Header().Set("content-type", "application/json")
 			if sizeHeader := r.Header.Get("Response-Size"); sizeHeader != "" {
 				if size, err := strconv.Atoi(sizeHeader); err == nil && size > 0 {
 					responseSize = size
@@ -95,6 +93,7 @@ func main() {
 				responseData[i] = strconv.Itoa(responseSize)
 			}
 
+			rw.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(rw).Encode(responseData)
 		}
 
